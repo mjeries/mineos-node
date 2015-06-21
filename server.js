@@ -329,6 +329,43 @@ server.backend = function(base_dir, socket_emitter) {
             }
           });
           break;
+        case 'cuberite_download':
+          var request = require('request');
+          var fs = require('fs-extra');
+
+          var dir_concat = args.profile.id;
+          var dest_dir = '/var/games/minecraft/profiles/{0}'.format(dir_concat);
+          var filename = 'Cuberite.tar.gz';
+          var dest_filepath = path.join(dest_dir, filename);
+
+          var url = 'http://builds.cuberite.org/job/Cuberite%20Linux%20x86%20Master/{0}/artifact/{1}'.format(args.profile.version, filename);
+
+          fs.ensureDir(dest_dir, function(err) {
+            if (err) {
+              logging.error('[WEBUI] Error attempting download:', err);
+            } else {
+              request(url)
+                .on('complete', function(response) {
+                  if (response.statusCode == 200) {
+                    logging.log('[WEBUI] Successfully downloaded {0} to {1}'.format(url, dest_filepath));
+                    args['dest_dir'] = dest_dir;
+                    args['filename'] = filename;
+                    args['success'] = true;
+                    args['help_text'] = 'Successfully downloaded {0} to {1}'.format(url, dest_filepath);
+                    self.front_end.emit('file_download', args);
+                    self.send_profile_list();
+                  } else {
+                    logging.error('[WEBUI] Server was unable to download file:', url);
+                    logging.error('[WEBUI] Remote server returned status {0} with headers:'.format(response.statusCode), response.headers);
+                    args['success'] = false;
+                    args['help_text'] = 'Remote server did not return {0} (status {1})'.format(filename, response.statusCode);
+                    self.front_end.emit('file_download', args);
+                  }
+                })
+                .pipe(fs.createWriteStream(dest_filepath))
+            }
+          });
+          break;
         case 'pocketmine_download':
           var request = require('request');
           var fs = require('fs-extra');
@@ -421,6 +458,7 @@ server.backend = function(base_dir, socket_emitter) {
         'mojang': async.retry(2, self.check_profiles.mojang),
         'ftb': async.retry(2, self.check_profiles.ftb),
         'ftb_3rd': async.retry(2, self.check_profiles.ftb_third_party),
+        'cuberite': async.retry(2, self.check_profiles.cuberite),
         'pocketmine': async.retry(2, self.check_profiles.pocketmine),
         'php': async.retry(2, self.check_profiles.php)
       }, function(err, results) {
@@ -551,6 +589,44 @@ server.backend = function(base_dir, socket_emitter) {
             callback(null, p);
         }
         request({ url: FTB_VERSIONS_URL, json: false }, handle_reply);
+      },
+      cuberite: function(callback) {
+        var request = require('request');
+        var xml_parser = require('xml2js');
+        var options = {
+          url: 'http://builds.cuberite.org/job/Cuberite%20Linux%20x86%20Master/rssAll',
+          headers: {
+            'User-Agent': 'MineOS Release Browser'
+          }
+        };
+
+        var p = [];
+
+        function handle_reply(err, response, body) {
+          if (!err && response.statusCode === 200)
+            xml_parser.parseString(body, function(inner_err, result) {
+              var packs = result['feed']['entry'];
+              var latest_build = true;
+
+              for (var index in packs) {
+                var item = packs[index];
+                item['version'] = item.title[0].match(/#(\d+)/)[1];
+                var dir_concat = 'Cuberite-{0}'.format(item['version']);
+                item['group'] = 'cuberite';
+                item['type'] = (latest_build ? 'release' : 'old_version');
+                item['id'] = dir_concat;
+                item['webui_desc'] = item.title[0];
+                item['weight'] = 8;
+                item['downloaded'] = fs.existsSync(path.join(base_dir, mineos.DIRS['profiles'], dir_concat));
+                p.push(item);
+                latest_build = false;
+              }
+              callback(err || inner_err, p);
+            })
+          else
+            callback(null, p);
+        }
+        request(options, handle_reply);
       },
       pocketmine: function(callback) {
         var request = require('request');
