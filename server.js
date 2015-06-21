@@ -332,6 +332,8 @@ server.backend = function(base_dir, socket_emitter) {
         case 'cuberite_download':
           var request = require('request');
           var fs = require('fs-extra');
+          var tar = require('tar');
+          var zlib = require('zlib');
 
           var dir_concat = args.profile.id;
           var dest_dir = '/var/games/minecraft/profiles/{0}'.format(dir_concat);
@@ -352,8 +354,25 @@ server.backend = function(base_dir, socket_emitter) {
                     args['filename'] = filename;
                     args['success'] = true;
                     args['help_text'] = 'Successfully downloaded {0} to {1}'.format(url, dest_filepath);
-                    self.front_end.emit('file_download', args);
-                    self.send_profile_list();
+
+                    var extractor = tar.Extract({
+                      path: dest_dir,
+                      strip: 1
+                    })
+                      .on('error', function(err) {
+                        logging.err('Cuberite extract error', err)
+                      })
+                      .on('end', function() {
+                        self.front_end.emit('file_download', args);
+                        self.send_profile_list();
+                      });
+
+                    var gunzip = zlib.createGunzip();
+                    var rstream = fs.createReadStream(dest_filepath);
+
+                    rstream
+                      .pipe(gunzip)
+                      .pipe(extractor);
                   } else {
                     logging.error('[WEBUI] Server was unable to download file:', url);
                     logging.error('[WEBUI] Remote server returned status {0} with headers:'.format(response.statusCode), response.headers);
