@@ -56,15 +56,19 @@ To start the webui in the foreground:
 
 Docker
 ------
+the login and password are: mc/admin
+
 Clone the repository on the host OS, then run:
 
-    docker run -itdP --name=mineos-node hexparrot/mineos-node
+    docker run -itdP --name=mineos-node mjeries/mineos-node
 
 Specify the ports manually if you do not want them to change when restarting the container.
 For example:
 
-    docker run -itd -p 8443:8443 -p 25565:25565 -p 25566:25566 -p 25567:25567 -p 25568:25568 -p 25569:25569 --name=mineos-node hexparrot/mineos-node
+    docker run -itd -p 8443:8443 -p 25565:25565 -p 25566:25566 -p 25567:25567 -p 25568:25568 -p 25569:25569 --name=mineos-node mjeries/mineos-node
 
+Specify the volume if you want to add a specific storage to your container : 
+    docker run -itd -p 8443:8443 -p 25565:25565 -p 25566:25566 -p 25567:25567 -p 25568:25568 -p 25569:25569 -v location_path:/var/games/minecraft  --name=mineos-node mjeries/mineos-node
 
 Things to watch out for
 ------
@@ -132,3 +136,5 @@ EVENTUALLY
 
 * implement previous_versions: functionality to roll back or view particular files' previous state
 * identify java versions in web-ui, allow choice of utilized jvm
+* 
+For issues please post at .....
